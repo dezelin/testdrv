@@ -15,21 +15,29 @@
  * along with blobdevice. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __BLOBDEVICE_H
-#define __BLOBDEVICE_H
+#ifndef __BLOB_FIFOH
+#define __BLOB_FIFOH
 
-/* Used for logging */
-#define CLASS_NAME              "blobdevice"
+#include <linux/list.h>
 
-#define BLOBDEVICE_AUTHOR       "Aleksandar Dezelin"
-#define BLOBDEVICE_DESCRIPTION  "Test character device"
-#define BLOBDEVICE_LICENSE      "GPL"
-#define BLOBDEVICE_VERSION      "0.0.1"
+struct blob {
+    char *buffer;
+    int size;
+    struct list_head list;
+};
 
-#define BLOBDEVICE_MAJOR        0
+struct blob_fifo {
+   int size;
+   struct blob *blobs;  
+};
 
-#define MAX_BUFFER_SIZE         (1 << 20)
+int blob_fifo_init(struct blob_fifo *fifo);
+void blob_fifo_clear(struct blob_fifo *fifo);
+void blob_fifo_destroy(struct blob_fifo *fifo);
 
+int blob_fifo_size(struct blob_fifo* fifo);
+void blob_fifo_push(struct blob_fifo *fifo, struct blob *b);
+struct blob* blob_fifo_pop(struct blob_fifo *fifo);
 
-#endif /* __BLOBDEVICE_H */
+#endif /* __BLOB_FIFOH */
 

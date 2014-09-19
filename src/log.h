@@ -15,21 +15,16 @@
  * along with blobdevice. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __BLOBDEVICE_H
-#define __BLOBDEVICE_H
+#ifndef __LOG_H
+#define __LOG_H
 
-/* Used for logging */
-#define CLASS_NAME              "blobdevice"
+#include "blobdevice.h"
+#include <linux/kernel.h>
 
-#define BLOBDEVICE_AUTHOR       "Aleksandar Dezelin"
-#define BLOBDEVICE_DESCRIPTION  "Test character device"
-#define BLOBDEVICE_LICENSE      "GPL"
-#define BLOBDEVICE_VERSION      "0.0.1"
+#define dbg(format, arg...) do { if (debug) pr_info(CLASS_NAME ": %s: " format, __FUNCTION__, ## arg); } while (0)
+#define err(format, arg...) pr_err(CLASS_NAME ": " format, ## arg)
+#define info(format, arg...) pr_info(CLASS_NAME ": " format, ## arg)
+#define warn(format, arg...) pr_warn(CLASS_NAME ": " format, ## arg)
 
-#define BLOBDEVICE_MAJOR        0
-
-#define MAX_BUFFER_SIZE         (1 << 20)
-
-
-#endif /* __BLOBDEVICE_H */
+#endif /* __LOG_H */
 
