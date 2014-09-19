@@ -38,16 +38,37 @@ MODULE_DESCRIPTION(BLOBDEVICE_DESCRIPTION);
 MODULE_LICENSE(BLOBDEVICE_LICENSE);
 MODULE_VERSION(BLOBDEVICE_VERSION);
 
+
 static struct blobdevice_device {
     char *buffer;
     int offset;
+    int size;
     struct semaphore sem;
     struct cdev cdev;
 } blobdevice_dev;
 
+
 static struct file_operations blobdevice_fops = {
     .owner = THIS_MODULE
 };
+
+
+static int blobdevice_device_allocate(struct blobdevice_device *dev, int size)
+{
+    char *tmp;
+    if ((tmp = kmalloc(min(MAX_BUFFER_SIZE, size), GFP_KERNEL)) == 0)
+        return -ENOMEM;
+
+    if (dev->buffer) {
+        memcpy(tmp, dev->buffer, dev->offset);
+        kfree(dev->buffer);
+    }
+
+    dev->buffer = tmp;
+
+    return 0;
+}
+
 
 static void blobdevice_device_clean(struct blobdevice_device *dev)
 {
@@ -55,10 +76,16 @@ static void blobdevice_device_clean(struct blobdevice_device *dev)
     kfree(dev->buffer);
 }
 
+
 static int blobdevice_device_init(struct blobdevice_device *dev) 
 {
     dev->buffer = 0;
+    dev->size = 0;
     dev->offset = 0;
+    if (blobdevice_device_allocate(dev, 
+                min(MAX_BUFFER_SIZE, blobdevice_buffer_size)) < 0)
+        return -ENOMEM;
+
     sema_init(&dev->sem, 1);
     
     cdev_init(&dev->cdev, &blobdevice_fops);
@@ -67,6 +94,7 @@ static int blobdevice_device_init(struct blobdevice_device *dev)
 
     return cdev_add(&dev->cdev, MKDEV(blobdevice_major, blobdevice_minor), 1);
 }
+
 
 static int __init blobdevice_init(void)
 {
