@@ -16,6 +16,7 @@
  */
 
 #include "device.h"
+#include "log.h"
 #include "quantum_queue.h"
 
 #include <linux/cdev.h>
@@ -89,7 +90,7 @@ static int __init testdrv_init(void)
     dev_t dev;
     int result;
 
-    printk(KERN_ALERT "testdrv: module loaded\n");
+    info("testdrv: module loaded\n");
     
     if (device_major) {
         dev = MKDEV(device_major, device_minor);
@@ -100,12 +101,12 @@ static int __init testdrv_init(void)
     }
 
     if (result < 0) {
-        printk(KERN_ALERT "testdrv: can't allocate device major: %d\n", result);
+        err("can't allocate device major: %d\n", result);
         return result;
     }
 
     if ((result = testdrv_device_init(&testdrv_dev)) < 0) {
-        printk(KERN_ALERT "blockdevice: error adding device: %d\n", result);
+        err("error adding device: %d\n", result);
         return result;
     }
 
@@ -116,7 +117,7 @@ static void __exit testdrv_exit(void)
 {
     testdrv_device_clean(&testdrv_dev);
     unregister_chrdev_region(MKDEV(device_major, device_minor), 1);
-    printk(KERN_ALERT "testdrv: module unloaded\n");
+    info("module unloaded\n");
 }
 
 module_init(testdrv_init);
