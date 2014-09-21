@@ -15,21 +15,21 @@
  * along with blobdevice. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __BLOBDEVICE_H
-#define __BLOBDEVICE_H
+#ifndef __DEVICE_H
+#define __DEVICE_H
 
 /* Used for logging */
-#define CLASS_NAME              "blobdevice"
+#define CLASS_NAME          "testdrv"
 
-#define BLOBDEVICE_AUTHOR       "Aleksandar Dezelin"
-#define BLOBDEVICE_DESCRIPTION  "Test character device"
-#define BLOBDEVICE_LICENSE      "GPL"
-#define BLOBDEVICE_VERSION      "0.0.1"
+#define DEVICE_AUTHOR       "Aleksandar Dezelin"
+#define DEVICE_DESCRIPTION  "Test character device"
+#define DEVICE_LICENSE      "GPL"
+#define DEVICE_VERSION      "0.0.1"
 
-#define BLOBDEVICE_MAJOR        0
+#define DEVICE_MAJOR        0
 
-#define MAX_BUFFER_SIZE         (1 << 20)
+#define MAX_BUFFER_SIZE     (1 << 20)
 
 
-#endif /* __BLOBDEVICE_H */
+#endif /* __DEVICE_H */
 
