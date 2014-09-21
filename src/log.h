@@ -18,7 +18,7 @@
 #ifndef __LOG_H
 #define __LOG_H
 
-#include "blobdevice.h"
+#include "device.h"
 #include <linux/kernel.h>
 
 #define dbg(format, arg...) do { if (debug) pr_info(CLASS_NAME ": %s: " format, __FUNCTION__, ## arg); } while (0)
