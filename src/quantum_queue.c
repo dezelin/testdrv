@@ -32,6 +32,10 @@ void quantum_queue_clear(struct quantum_queue *qq)
 {
     struct quantum *q, *tmp;
     struct quantum *quantums = qq->quantums;
+
+    if (!quantums)
+        return;
+
     list_for_each_entry_safe(q, tmp, &quantums->list, list) {
         qq->size -= q->size;
         kfree(q->buffer);
