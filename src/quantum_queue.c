@@ -89,7 +89,42 @@ struct quantum* quantum_queue_pop(struct quantum_queue *qq)
     return q;
 }
 
-struct quantum* quantum_alloc(int size)
+extern struct quantum* quantum_queue_pop_buff(struct quantum_queue *qq, 
+        size_t count)
+{
+    int rest, total = 0;
+    struct quantum *q, *qn, *tmp;
+    struct quantum *quantums = qq->quantums;
+
+    if (!quantums)
+        return NULL;
+
+    if (count == 0 || quantum_queue_get_size(qq) == 0)
+        return NULL;
+    
+    if ((qn = quantum_alloc(count)) == NULL)
+        return NULL;
+
+    list_for_each_entry_safe_reverse(q, tmp, &quantums->list, list) {
+        rest = count - total;
+        if (q->size > rest) {
+            qn->size -= rest;
+            memcpy(qn->buffer + total, q->buffer + q->size, rest);
+            /* We are shrinking the buffer so krealloc() can't  fail */
+            qn->buffer = krealloc(qn->buffer, q->size, GFP_KERNEL);
+            break;
+        } else {
+            memcpy(qn->buffer + total, q->buffer, q->size);
+            total += q->size;
+            list_del(&q->list);
+            quantum_dealloc(q);
+        }
+    }
+    
+    return qn;
+}
+
+struct quantum* quantum_alloc(size_t size)
 {
     struct quantum *q;
 
