@@ -15,6 +15,7 @@
  * along with testdrv. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "log.h"
 #include "quantum_queue.h"
 
 #include <linux/errno.h>
@@ -25,6 +26,8 @@ int quantum_queue_init(struct quantum_queue *qq)
 {
     qq->size = 0;
     qq->quantums = NULL;
+
+    dbg("quantum queue %p initialized, size %d\n", qq, qq->size);
     return 0;
 }
 
@@ -33,10 +36,13 @@ void quantum_queue_clear(struct quantum_queue *qq)
     struct quantum *q, *tmp;
     struct quantum *quantums = qq->quantums;
 
+    dbg("quantum queue %p, size %d\n", qq, qq->size);
+
     if (!quantums)
         return;
 
     list_for_each_entry_safe(q, tmp, &quantums->list, list) {
+        dbg("quantum %p deallocated, size %d\n", q, q->size);
         qq->size -= q->size;
         kfree(q->buffer);
         list_del(&q->list);
@@ -46,6 +52,7 @@ void quantum_queue_clear(struct quantum_queue *qq)
     kfree(qq->quantums);
     qq->size = 0;
     qq->quantums = NULL;
+    dbg("quantum queue %p cleared, size %d\n", qq, qq->size);
 }
 
 void quantum_queue_destroy(struct quantum_queue *qq)
@@ -55,6 +62,7 @@ void quantum_queue_destroy(struct quantum_queue *qq)
 
 int quantum_queue_get_size(struct quantum_queue *qq)
 {
+    dbg("quantum queue %p, size %d\n", qq, qq->size);
     return qq->size;
 }
 
@@ -71,6 +79,8 @@ void quantum_queue_push(struct quantum_queue *qq, struct quantum *q)
     INIT_LIST_HEAD(&q->list);
     list_add_tail(&q->list, &qq->quantums->list);
     qq->size += q->size;
+    
+    dbg("quantum queue %p, size %d\n", qq, qq->size);
 }
 
 struct quantum* quantum_queue_pop(struct quantum_queue *qq)
@@ -86,6 +96,8 @@ struct quantum* quantum_queue_pop(struct quantum_queue *qq)
 
     list_del(&q->list);
     qq->size -= q->size;
+
+    dbg("quantum queue %p, size %d\n", qq, qq->size);
     return q;
 }
 
@@ -99,28 +111,39 @@ extern struct quantum* quantum_queue_pop_buff(struct quantum_queue *qq,
     if (!quantums)
         return NULL;
 
-    if (count == 0 || quantum_queue_get_size(qq) == 0)
+    if ((count = min(count, (size_t)qq->size)) == 0)
         return NULL;
     
     if ((qn = quantum_alloc(count)) == NULL)
         return NULL;
 
-    list_for_each_entry_safe_reverse(q, tmp, &quantums->list, list) {
-        rest = count - total;
-        if (q->size > rest) {
-            qn->size -= rest;
-            memcpy(qn->buffer + total, q->buffer + q->size, rest);
-            /* We are shrinking the buffer so krealloc() can't  fail */
-            qn->buffer = krealloc(qn->buffer, q->size, GFP_KERNEL);
+    dbg("count = %li\n", count);
+    
+    list_for_each_entry_safe(q, tmp, &quantums->list, list) {
+        if ((rest = (count - total)) < 1)
             break;
-        } else {
+        
+        dbg("quantum %p, size %d\n", q, q->size);
+        dbg("rest = %d\n", rest);
+        
+        if (q->size <= rest) {
             memcpy(qn->buffer + total, q->buffer, q->size);
             total += q->size;
+            qq->size -= q->size;
             list_del(&q->list);
             quantum_dealloc(q);
+        } else {
+            q->size -= rest;
+            qq->size -= rest;
+            memcpy(qn->buffer + total, q->buffer, rest);
+            memcpy(q->buffer, q->buffer + rest, q->size);
+            /* We are shrinking buffer - no need to check */
+            q->buffer = krealloc(q->buffer, q->size, GFP_KERNEL);
+            total += rest;
         }
     }
-    
+   
+    dbg("quantum queue %p, size = %li\n", qq, (size_t)qq->size); 
     return qn;
 }
 
@@ -136,12 +159,16 @@ struct quantum* quantum_alloc(size_t size)
         return NULL;
     }
 
-    q->size = 0;
+    q->size = size;
+
+    dbg("quantum %p allocated, size %d\n", q, q->size);
     return q;
 }
 
 void quantum_dealloc(struct quantum *q)
 {
+    dbg("quantum %p deallocated, size %d\n", q, q->size);
+
     kfree(q->buffer);
     kfree(q);
 }
