@@ -35,9 +35,12 @@ extern int quantum_queue_init(struct quantum_queue *qq);
 extern void quantum_queue_clear(struct quantum_queue *qq);
 extern void quantum_queue_destroy(struct quantum_queue *qq);
 
-int quantum_queue_size(struct quantum_queue *qq);
-void quantum_queue_push(struct quantum_queue *qq, struct quantum *q);
-struct quantum* quantum_queue_pop(struct quantum_queue *qq);
+extern int quantum_queue_size(struct quantum_queue *qq);
+extern void quantum_queue_push(struct quantum_queue *qq, struct quantum *q);
+extern struct quantum* quantum_queue_pop(struct quantum_queue *qq);
+
+extern struct quantum* quantum_alloc(int size);
+extern void quantum_dealloc(struct quantum *q);
 
 #endif /* __QUANTUM_QUEUE_H */
 
