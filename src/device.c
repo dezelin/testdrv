@@ -26,6 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 
 static int device_major = DEVICE_MAJOR;
@@ -34,6 +35,9 @@ module_param(device_major, int, S_IRUGO);
 
 static int device_buffer_size = MAX_BUFFER_SIZE;
 module_param(device_buffer_size, int, S_IRUGO);
+
+static int debug = 1;
+module_param(debug, int, S_IRUGO);
 
 MODULE_AUTHOR(DEVICE_AUTHOR);
 MODULE_DESCRIPTION(DEVICE_DESCRIPTION);
@@ -46,12 +50,131 @@ static struct testdrv_device {
     int offset;
     int size;
     struct semaphore sem;
+    wait_queue_head_t readq, writeq;
     struct cdev cdev;
 } testdrv_dev;
 
 
+
+static ssize_t testdrv_device_read(struct file *filp, char __user *buf, 
+        size_t count, loff_t *f_pos)
+{
+    struct quantum *q;
+    struct testdrv_device *dev = filp->private_data;
+
+    if (down_interruptible(&dev->sem))
+        return -ERESTARTSYS;
+
+    while(quantum_queue_get_size(dev->qq) == 0) {
+        /* Nothing to read */
+        up(&dev->sem);
+        if (filp->f_flags & O_NONBLOCK)
+            return -EAGAIN;
+
+        dbg("\"%s\" reading: going to sleep\n", current->comm);
+        if (wait_event_interruptible(dev->readq, 
+                    (quantum_queue_get_size(dev->qq) > 0)))
+            return -ERESTARTSYS;
+
+        if (down_interruptible(&dev->sem))
+            return -ERESTARTSYS;
+    }
+
+    if ((q = quantum_queue_pop_buff(dev->qq, count)) == NULL) {
+        up(&dev->sem);
+        return -EFAULT;
+    }
+
+    count = min(count, (size_t)q->size);
+    if (copy_to_user(buf, q->buffer, count)) {
+        up(&dev->sem);
+        return -EFAULT;
+    }
+
+    quantum_dealloc(q);
+
+    /* Wake up writers */
+    wake_up_interruptible(&dev->writeq);
+
+    dbg("\%s\" read %li bytes\n", current->comm, (long)count);
+
+    return count;
+}
+
+static ssize_t testdrv_device_write(struct file *filp, const char __user *buf, 
+        size_t count, loff_t *f_pos)
+{
+    struct quantum *q;
+    struct testdrv_device *dev = filp->private_data;
+
+    dbg("dev = %p\n", dev);
+    
+    if (down_interruptible(&dev->sem))
+        return -ERESTARTSYS;
+
+    /* Sleep while space is not available */
+    while(quantum_queue_get_size(dev->qq) >= device_buffer_size) {
+        DEFINE_WAIT(wait);
+
+        up(&dev->sem);
+        if (filp->f_flags & O_NONBLOCK)
+            return -EAGAIN;
+
+        dbg("\"%s\" writing: going to sleep\n", current->comm);
+    
+        prepare_to_wait(&dev->writeq, &wait, TASK_INTERRUPTIBLE);
+        if (quantum_queue_get_size(dev->qq) >= device_buffer_size)
+            schedule();
+
+        finish_wait(&dev->writeq, &wait);
+        if (signal_pending(current))
+            return -ERESTARTSYS;
+
+        if (down_interruptible(&dev->sem))
+            return -ERESTARTSYS;
+    }
+
+    count = min(count, (size_t)quantum_queue_get_size(dev->qq));
+    if ((q = quantum_alloc(count)) == NULL) {
+        up(&dev->sem);
+        return -EFAULT;
+    }
+
+    dbg("Going to accept %li bytes to %p from %p\n", (long)count, q->buffer, buf);
+    if (copy_from_user(q->buffer, buf, count)) {
+        up(&dev->sem);
+        return -EFAULT;
+    }
+
+    quantum_queue_push(dev->qq, q);
+    up(&dev->sem);
+    
+    /* Awake readers */
+    wake_up_interruptible(&dev->readq);
+    
+    dbg("\"%s\" wrote %li bytes\n", current->comm, (long)count);
+
+    return count;
+}
+
+static int testdrv_device_open(struct inode *inode, struct file *filp)
+{
+    filp->private_data = container_of(inode->i_cdev, struct testdrv_device, cdev);
+    return 0;
+}
+
+static int testdrv_device_release(struct inode *inode, struct file *filp)
+{
+    return 0;
+}
+
+
 static struct file_operations testdrv_fops = {
-    .owner = THIS_MODULE
+    .owner      = THIS_MODULE,
+    .read       = testdrv_device_read,
+    .write      = testdrv_device_write,
+    .open       = testdrv_device_open,
+    .release    = testdrv_device_release,
 };
 
 
@@ -60,7 +183,6 @@ static void testdrv_device_clean(struct testdrv_device *dev)
     cdev_del(&dev->cdev);
     quantum_queue_destroy(dev->qq); 
 }
-
 
 static int testdrv_device_init(struct testdrv_device *dev) 
 {
@@ -76,6 +198,8 @@ static int testdrv_device_init(struct testdrv_device *dev)
     dev->offset = 0;
 
     sema_init(&dev->sem, 1);
+    init_waitqueue_head(&dev->readq);
+    init_waitqueue_head(&dev->writeq);
     
     cdev_init(&dev->cdev, &testdrv_fops);
     dev->cdev.owner = THIS_MODULE;
@@ -83,7 +207,6 @@ static int testdrv_device_init(struct testdrv_device *dev)
 
     return cdev_add(&dev->cdev, MKDEV(device_major, device_minor), 1);
 }
-
 
 static int __init testdrv_init(void)
 {
