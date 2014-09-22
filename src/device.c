@@ -16,7 +16,6 @@
  */
 
 #include "device.h"
-#include "log.h"
 #include "quantum_queue.h"
 
 #include <linux/cdev.h>
@@ -34,10 +33,13 @@ static int device_minor = 0;
 module_param(device_major, int, S_IRUGO);
 
 static int device_buffer_size = MAX_BUFFER_SIZE;
-module_param(device_buffer_size, int, S_IRUGO);
+module_param(device_buffer_size, int, S_IRUGO|S_IWUSR);
 
-static int debug = 1;
-module_param(debug, int, S_IRUGO);
+/* extern */
+int debug = 1;
+module_param(debug, int, S_IRUGO|S_IWUSR);
+
+#include "log.h"
 
 MODULE_AUTHOR(DEVICE_AUTHOR);
 MODULE_DESCRIPTION(DEVICE_DESCRIPTION);
@@ -62,6 +64,10 @@ static ssize_t testdrv_device_read(struct file *filp, char __user *buf,
     struct quantum *q;
     struct testdrv_device *dev = filp->private_data;
 
+    dbg("Request to read %li bytes\n", count);
+    if (count == 0)
+        return 0;
+
     if (down_interruptible(&dev->sem))
         return -ERESTARTSYS;
 
@@ -80,18 +86,25 @@ static ssize_t testdrv_device_read(struct file *filp, char __user *buf,
             return -ERESTARTSYS;
     }
 
+    /* Pop count bytes from the quantum queue */
+    count = min(count, (size_t)dev->qq->size);
     if ((q = quantum_queue_pop_buff(dev->qq, count)) == NULL) {
         up(&dev->sem);
         return -EFAULT;
     }
 
+    dbg("count = %li\n", count);
     count = min(count, (size_t)q->size);
+
+    /* Copy data to user space */
     if (copy_to_user(buf, q->buffer, count)) {
         up(&dev->sem);
         return -EFAULT;
     }
 
+    /* Destroy allocated quantum */
     quantum_dealloc(q);
+    up(&dev->sem);
 
     /* Wake up writers */
     wake_up_interruptible(&dev->writeq);
@@ -107,7 +120,8 @@ static ssize_t testdrv_device_write(struct file *filp, const char __user *buf,
     struct quantum *q;
     struct testdrv_device *dev = filp->private_data;
 
-    dbg("dev = %p\n", dev);
+    if (count == 0)
+        return 0;
     
     if (down_interruptible(&dev->sem))
         return -ERESTARTSYS;
@@ -134,18 +148,23 @@ static ssize_t testdrv_device_write(struct file *filp, const char __user *buf,
             return -ERESTARTSYS;
     }
 
-    count = min(count, (size_t)quantum_queue_get_size(dev->qq));
+    /* Allocate new quantum for data */
+    count = min(count, (size_t)(device_buffer_size - 
+                quantum_queue_get_size(dev->qq)));
     if ((q = quantum_alloc(count)) == NULL) {
         up(&dev->sem);
         return -EFAULT;
     }
 
     dbg("Going to accept %li bytes to %p from %p\n", (long)count, q->buffer, buf);
+
+    /* Copy data from user space to the quantum */
     if (copy_from_user(q->buffer, buf, count)) {
         up(&dev->sem);
         return -EFAULT;
     }
 
+    /* Add the quantum to the queue */
     quantum_queue_push(dev->qq, q);
     up(&dev->sem);
     

@@ -21,6 +21,8 @@
 #include "device.h"
 #include <linux/kernel.h>
 
+extern int debug;
+
 #define dbg(format, arg...) do { if (debug) pr_info(CLASS_NAME ": %s: " format, __FUNCTION__, ## arg); } while (0)
 #define err(format, arg...) pr_err(CLASS_NAME ": " format, ## arg)
 #define info(format, arg...) pr_info(CLASS_NAME ": " format, ## arg)
