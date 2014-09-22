@@ -89,3 +89,25 @@ struct quantum* quantum_queue_pop(struct quantum_queue *qq)
     return q;
 }
 
+struct quantum* quantum_alloc(int size)
+{
+    struct quantum *q;
+
+    if ((q = kmalloc(sizeof(struct quantum), GFP_KERNEL)) == NULL)
+        return NULL;
+
+    if ((q->buffer = kmalloc(size, GFP_KERNEL)) == NULL) {
+        kfree(q);
+        return NULL;
+    }
+
+    q->size = 0;
+    return q;
+}
+
+void quantum_dealloc(struct quantum *q)
+{
+    kfree(q->buffer);
+    kfree(q);
+}
+
