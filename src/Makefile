@@ -18,3 +18,6 @@ uninstall:
 		sudo rmmod testdrv
 		sudo rm -f /dev/testdrv
 
+test:
+		./test_stream.sh
+
