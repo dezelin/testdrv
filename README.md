@@ -15,8 +15,6 @@ FIFO characted device driver implementation for the interview.
     make install
     ./test_stream.h
 
-This will generate a file filled with random data in /tmp directory, stream it
-through the driver file /dev/testdrv and save it to another file in /tmp directory.
-
-SHA sums of those two files are compared after that.
+This will generate a file filled with random data in /tmp directory and stream it
+to another file through the driver. SHA128 sums of those two files are compared after streaming.
 
